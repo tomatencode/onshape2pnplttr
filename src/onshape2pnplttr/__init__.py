@@ -12,6 +12,7 @@ from .config import (
     ELEMENT_MODES,
     FIT_MODES,
     PAGE_PRESETS,
+    ROTATE_CHOICES,
     WORKSPACE_PRESETS,
     ConvertOptions,
 )
@@ -31,6 +32,7 @@ __all__ = [
     "PAGE_PRESETS",
     "DEFAULT_WORKSPACE",
     "FIT_MODES",
+    "ROTATE_CHOICES",
     "ELEMENT_MODES",
     "__version__",
 ]

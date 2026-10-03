@@ -103,8 +103,12 @@ def _build_document(paths: list[Path], options: ConvertOptions) -> ConversionRes
     bounds = Bounds()
     for _, subpath in entries:
         bounds.add_points(subpath.polyline(curves=True, segments=options.bezier_segments))
-    natural_w_mm = bounds.width * PT_TO_MM
-    natural_h_mm = bounds.height * PT_TO_MM
+    raw_w_mm = bounds.width * PT_TO_MM
+    raw_h_mm = bounds.height * PT_TO_MM
+    if options.rotate in (90, 270):
+        natural_w_mm, natural_h_mm = raw_h_mm, raw_w_mm
+    else:
+        natural_w_mm, natural_h_mm = raw_w_mm, raw_h_mm
     stats.natural_mm = (natural_w_mm, natural_h_mm)
 
     scale, page_w, page_h = _compute_layout(natural_w_mm, natural_h_mm, options)
@@ -116,10 +120,27 @@ def _build_document(paths: list[Path], options: ConvertOptions) -> ConversionRes
     offset_x = (page_w - draw_w) / 2.0
     offset_y = (page_h - draw_h) / 2.0
 
+    rotate = options.rotate
+
     def transform(x_pt: float, y_pt: float) -> tuple[float, float]:
-        # device pt (y-up) -> document mm (y-down), anchored to the artwork box.
-        x = offset_x + (x_pt - bounds.min_x) * PT_TO_MM * scale
-        y = offset_y + (bounds.max_y - y_pt) * PT_TO_MM * scale
+        # device pt (y-up) -> document mm (y-down), anchored to the artwork
+        # box, rotated clockwise by ``rotate`` degrees about the box centre.
+        # (u, v) is the unrotated top-left-origin position in pt.
+        u = x_pt - bounds.min_x
+        v = bounds.max_y - y_pt
+        if rotate == 90:
+            ru = bounds.height - v
+            rv = u
+        elif rotate == 180:
+            ru = bounds.width - u
+            rv = bounds.height - v
+        elif rotate == 270:
+            ru = v
+            rv = bounds.width - u
+        else:
+            ru, rv = u, v
+        x = offset_x + ru * PT_TO_MM * scale
+        y = offset_y + rv * PT_TO_MM * scale
         return (round(x, options.round_mm), round(y, options.round_mm))
 
     # -- pens (first-seen layer order) ----------------------------------

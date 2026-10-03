@@ -64,6 +64,7 @@ onshape2pnplttr INPUT.pdf [-o OUT.pnplttr] [options]
 | `--no-fills` | – | Drop filled regions (keep outlines only) |
 | `--drop-layer NAME` | – | Exclude a layer (repeatable) |
 | `--page-index` | `0` | Which PDF page to convert |
+| `--rotate` | `90` | Rotate artwork clockwise: `0`, `90`, `180`, `270` |
 | `--list-layers` | – | List detected layers and exit |
 | `--compact` | – | Write minified JSON |
 | `-q, --quiet` | – | Suppress the summary |
@@ -114,8 +115,10 @@ Conversion steps:
 3. Execute the content stream, tracking `q`/`Q`/`cm` and colours, emitting
    `Subpath`s with `Line` / `CubicBezier` / `QuadBezier` moves.
 4. Filter (fills, dropped layers) and compute the artwork bounding box.
-5. Compute the fit scale and page size, then map points from PDF device space
-   (points, y-up) to document space (mm, y-down): `y_doc = (max_y - y) * mm`.
+5. Rotate the box (`--rotate`, default `90` clockwise) then compute the fit
+   scale and page size, then map points from PDF device space
+   (points, y-up) to document space (mm, y-down): `y_doc = (max_y - y) * mm`
+   composed with the rotation.
 6. Emit one element per subpath, with pens in first-seen layer order.
 
 ### Output modes

@@ -46,7 +46,7 @@ class FitTests(unittest.TestCase):
     RECT = b"0 0 m 100 0 l 100 50 l 0 50 l h S"  # 100 x 50 pt rectangle
 
     def test_fit_scales_to_workspace(self):
-        result = convert_bytes(make_pdf(self.RECT))
+        result = convert_bytes(make_pdf(self.RECT), ConvertOptions(rotate=0))
         page = result.document["page"]
         # 100 pt = 35.28 mm, fitted to 96% of a 200 mm workspace -> 192 mm wide.
         self.assertAlmostEqual(page["page_width"], 192.0, places=1)
@@ -63,16 +63,16 @@ class FitTests(unittest.TestCase):
             self.assertLessEqual(y, page["page_height"] + 1e-6)
 
     def test_actual_size_is_one_to_one(self):
-        page = convert_bytes(make_pdf(self.RECT), ConvertOptions(fit="actual")).document["page"]
+        page = convert_bytes(make_pdf(self.RECT), ConvertOptions(fit="actual", rotate=0)).document["page"]
         self.assertAlmostEqual(page["page_width"], 100 * PT_TO_MM, places=2)
         self.assertAlmostEqual(page["page_height"], 50 * PT_TO_MM, places=2)
 
     def test_explicit_scale(self):
-        result = convert_bytes(make_pdf(self.RECT), ConvertOptions(fit="scale", scale=2.0))
+        result = convert_bytes(make_pdf(self.RECT), ConvertOptions(fit="scale", scale=2.0, rotate=0))
         self.assertAlmostEqual(result.document["page"]["page_width"], 200 * PT_TO_MM, places=2)
 
     def test_page_override_centres_artwork(self):
-        opts = ConvertOptions(fit="actual", page=(300.0, 400.0))
+        opts = ConvertOptions(fit="actual", page=(300.0, 400.0), rotate=0)
         result = convert_bytes(make_pdf(self.RECT), opts)
         self.assertEqual(result.document["page"]["page_width"], 300.0)
         xs = [p[0] for p in all_points(result.document)]
@@ -101,6 +101,71 @@ class LayoutTests(unittest.TestCase):
     def test_zero_size_is_not_scaled(self):
         scale, _, _ = _compute_layout(0.0, 0.0, ConvertOptions())
         self.assertEqual(scale, 1.0)
+
+
+class RotateTests(unittest.TestCase):
+    RECT = b"0 0 m 100 0 l 100 50 l 0 50 l h S"  # 100 x 50 pt rectangle
+
+    def test_default_is_90_clockwise(self):
+        self.assertEqual(ConvertOptions().rotate, 90)
+
+    def test_invalid_rotate_rejected(self):
+        with self.assertRaises(ValueError):
+            ConvertOptions(rotate=45)
+
+    def test_rotate_90_swaps_natural_size(self):
+        plain = convert_bytes(make_pdf(self.RECT), ConvertOptions(fit="actual", rotate=0))
+        rotated = convert_bytes(make_pdf(self.RECT), ConvertOptions(fit="actual", rotate=90))
+        self.assertAlmostEqual(plain.stats.natural_mm[0], 100 * PT_TO_MM, places=3)
+        self.assertAlmostEqual(plain.stats.natural_mm[1], 50 * PT_TO_MM, places=3)
+        self.assertAlmostEqual(rotated.stats.natural_mm[0], 50 * PT_TO_MM, places=3)
+        self.assertAlmostEqual(rotated.stats.natural_mm[1], 100 * PT_TO_MM, places=3)
+        self.assertAlmostEqual(rotated.document["page"]["page_width"], 50 * PT_TO_MM, places=3)
+        self.assertAlmostEqual(rotated.document["page"]["page_height"], 100 * PT_TO_MM, places=3)
+
+    def test_rotate_90_maps_corners_clockwise(self):
+        # Single stroked corner: (0,0) -> (100,0) in pt, y-up.
+        line = convert_bytes(
+            make_pdf(b"0 0 m 100 0 l S"),
+            ConvertOptions(fit="actual", rotate=90),
+        ).document["elements"][0]["points"]
+        # Clockwise in y-down output: left-to-right becomes top-to-bottom.
+        self.assertAlmostEqual(line[0][0], 0.0, places=3)
+        self.assertAlmostEqual(line[0][1], 0.0, places=3)
+        self.assertAlmostEqual(line[1][0], 0.0, places=3)
+        self.assertAlmostEqual(line[1][1], 100 * PT_TO_MM, places=3)
+
+    def test_rotate_180_and_270(self):
+        line180 = convert_bytes(
+            make_pdf(b"0 0 m 100 0 l S"),
+            ConvertOptions(fit="actual", rotate=180),
+        ).document["elements"][0]["points"]
+        self.assertAlmostEqual(line180[0][0], 100 * PT_TO_MM, places=3)
+        self.assertAlmostEqual(line180[1][0], 0.0, places=3)
+        line270 = convert_bytes(
+            make_pdf(b"0 0 m 100 0 l S"),
+            ConvertOptions(fit="actual", rotate=270),
+        ).document["elements"][0]["points"]
+        self.assertAlmostEqual(line270[0][0], 0.0, places=3)
+        self.assertAlmostEqual(line270[0][1], 100 * PT_TO_MM, places=3)
+        self.assertAlmostEqual(line270[1][0], 0.0, places=3)
+        self.assertAlmostEqual(line270[1][1], 0.0, places=3)
+
+    def test_rotate_stays_within_page(self):
+        document = convert_bytes(make_pdf(self.RECT)).document
+        page = document["page"]
+        for x, y in all_points(document):
+            self.assertGreaterEqual(x, -1e-6)
+            self.assertLessEqual(x, page["page_width"] + 1e-6)
+            self.assertGreaterEqual(y, -1e-6)
+            self.assertLessEqual(y, page["page_height"] + 1e-6)
+
+    def test_path_mode_rotate_keeps_curves(self):
+        content = b"0 0 m 0 10 10 10 10 0 c S"
+        opts = ConvertOptions(element_mode="path", fit="actual", rotate=90)
+        element = convert_bytes(make_pdf(content), opts).document["elements"][0]
+        self.assertEqual(element["type"], "Path")
+        self.assertEqual(element["strokes"][0]["moves"][0]["type"], "CubicBezier")
 
 
 class ModeTests(unittest.TestCase):

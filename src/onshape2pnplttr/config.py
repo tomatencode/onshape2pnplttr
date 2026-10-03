@@ -26,6 +26,7 @@ PAGE_PRESETS: dict[str, tuple[float, float]] = {
 
 FIT_MODES = ("fit", "actual", "scale")
 ELEMENT_MODES = ("drawing", "path")
+ROTATE_CHOICES = (0, 90, 180, 270)
 
 
 @dataclass
@@ -36,6 +37,10 @@ class ConvertOptions:
     on each side); ``fit='actual'`` keeps 1:1 millimetres; ``fit='scale'``
     applies ``scale`` directly. An explicit ``page`` overrides the derived page
     size and centres the artwork within it.
+
+    ``rotate`` turns the artwork clockwise by 0/90/180/270 degrees *before*
+    fitting. ``rotate=90`` is the default because portrait CAD title blocks
+    plot best on landscape plotter workspaces.
     """
 
     workspace: tuple[float, float] = WORKSPACE_PRESETS[DEFAULT_WORKSPACE]
@@ -55,12 +60,15 @@ class ConvertOptions:
     include_fills: bool = True
     drop_layers: tuple[str, ...] = ()
     page_index: int = 0
+    rotate: int = 90  # clockwise degrees; one of ROTATE_CHOICES
 
     def __post_init__(self) -> None:
         if self.fit not in FIT_MODES:
             raise ValueError(f"fit must be one of {FIT_MODES}, got {self.fit!r}")
         if self.element_mode not in ELEMENT_MODES:
             raise ValueError(f"element_mode must be one of {ELEMENT_MODES}, got {self.element_mode!r}")
+        if self.rotate not in ROTATE_CHOICES:
+            raise ValueError(f"rotate must be one of {ROTATE_CHOICES}, got {self.rotate!r}")
         if not 0.0 <= self.margin < 0.5:
             raise ValueError("margin must be in [0, 0.5)")
         if self.bezier_segments < 1:
