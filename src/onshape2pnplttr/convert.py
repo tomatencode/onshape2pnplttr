@@ -164,7 +164,7 @@ def _build_document(paths: list[Path], options: ConvertOptions) -> ConversionRes
         # Lossless mode: one element per subpath, Béziers kept as strokes.
         for index, (layer, subpath) in enumerate(entries):
             element_id = f"e{index + 1}"
-            pen = pen_index.get(layer, 0)
+            pen = pen_index.get(str(layer), 0)
             strokes = [pnplttr.subpath_to_stroke(subpath, transform)]
             elements.append(pnplttr.path_element(element_id, pen, index, strokes))
     else:
@@ -192,7 +192,7 @@ def _build_document(paths: list[Path], options: ConvertOptions) -> ConversionRes
 
         for index, (layer, points) in enumerate(merged):
             element_id = f"e{index + 1}"
-            pen = pen_index.get(layer, 0)
+            pen = pen_index.get(str(layer), 0)
             elements.append(pnplttr.drawing_element(element_id, pen, index, points))
 
     if options.outline and entries:
