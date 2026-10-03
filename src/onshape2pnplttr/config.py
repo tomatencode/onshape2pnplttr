@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .merge import DEFAULT_TOLERANCE_MM
+
 # 1 PDF point = 1/72 inch; 1 inch = 25.4 mm.
 PT_TO_MM = 25.4 / 72.0
 
@@ -66,6 +68,9 @@ class ConvertOptions:
     rotate: int = 90  # clockwise degrees; one of ROTATE_CHOICES
     outline: bool = True  # append a rectangular outline around the artwork
 
+    merge_continuations: bool = True  # join polylines whose endpoints touch
+    merge_tolerance_mm: float = DEFAULT_TOLERANCE_MM
+
     def __post_init__(self) -> None:
         if self.fit not in FIT_MODES:
             raise ValueError(f"fit must be one of {FIT_MODES}, got {self.fit!r}")
@@ -79,6 +84,8 @@ class ConvertOptions:
             raise ValueError("bezier_segments must be >= 1")
         if self.scale <= 0:
             raise ValueError("scale must be > 0")
+        if self.merge_tolerance_mm < 0:
+            raise ValueError("merge_tolerance_mm must be >= 0")
 
     # -- helpers ---------------------------------------------------------
     @classmethod

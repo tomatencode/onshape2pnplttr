@@ -17,6 +17,7 @@ from .config import (
     ConvertOptions,
 )
 from .convert import ConversionResult, ConversionStats, convert_bytes, convert_pdf
+from .merge import DEFAULT_TOLERANCE_MM, merge_polylines
 from .pnplttr import write_document
 
 __version__ = "0.1.0"
@@ -27,10 +28,12 @@ __all__ = [
     "ConversionStats",
     "convert_pdf",
     "convert_bytes",
+    "merge_polylines",
     "write_document",
     "WORKSPACE_PRESETS",
     "PAGE_PRESETS",
     "DEFAULT_WORKSPACE",
+    "DEFAULT_TOLERANCE_MM",
     "FIT_MODES",
     "ROTATE_CHOICES",
     "ELEMENT_MODES",

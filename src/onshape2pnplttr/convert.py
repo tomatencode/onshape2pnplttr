@@ -8,6 +8,7 @@ from . import pnplttr
 from .config import PT_TO_MM, ConvertOptions
 from .geometry import Bounds
 from .interpreter import Interpreter
+from .merge import merge_polylines
 from .model import Path, PathKind, Subpath
 from .pdf import PdfDocument
 
@@ -19,6 +20,7 @@ class ConversionStats:
     elements: int = 0
     points: int = 0
     subpaths: int = 0
+    merged: int = 0
     natural_mm: tuple[float, float] = (0.0, 0.0)
     scale: float = 1.0
     page_mm: tuple[float, float] = (0.0, 0.0)
@@ -157,19 +159,41 @@ def _build_document(paths: list[Path], options: ConvertOptions) -> ConversionRes
 
     # -- elements --------------------------------------------------------
     elements: list[dict] = []
-    for index, (layer, subpath) in enumerate(entries):
-        element_id = f"e{index + 1}"
-        pen = pen_index.get(layer, 0)
-        if options.element_mode == "path":
+
+    if options.element_mode == "path":
+        # Lossless mode: one element per subpath, Béziers kept as strokes.
+        for index, (layer, subpath) in enumerate(entries):
+            element_id = f"e{index + 1}"
+            pen = pen_index.get(layer, 0)
             strokes = [pnplttr.subpath_to_stroke(subpath, transform)]
             elements.append(pnplttr.path_element(element_id, pen, index, strokes))
+    else:
+        # Flattened mode: a CAD exporter breaks one visible line across
+        # several subpaths (every PDF moveto starts a new one), so join the
+        # pieces that touch before emitting, otherwise the plotter lifts the
+        # pen at every break. See :mod:`onshape2pnplttr.merge`.
+        polylines: list[tuple[str, list[tuple[float, float]]]] = [
+            (
+                layer,
+                [
+                    transform(x, y)
+                    for x, y in subpath.polyline(curves=True, segments=options.bezier_segments)
+                ],
+            )
+            for layer, subpath in entries
+        ]
+        stats.points = sum(len(points) for _, points in polylines)
+
+        if options.merge_continuations and len(polylines) > 1:
+            merged = merge_polylines(polylines, options.merge_tolerance_mm)
         else:
-            points = [
-                transform(x, y)
-                for x, y in subpath.polyline(curves=True, segments=options.bezier_segments)
-            ]
+            merged = polylines
+        stats.merged = len(polylines) - len(merged)
+
+        for index, (layer, points) in enumerate(merged):
+            element_id = f"e{index + 1}"
+            pen = pen_index.get(layer, 0)
             elements.append(pnplttr.drawing_element(element_id, pen, index, points))
-            stats.points += len(points)
 
     if options.outline and entries:
         # Rectangular outline around the fitted artwork bounds (document space

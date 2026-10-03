@@ -66,6 +66,8 @@ onshape2pnplttr INPUT.pdf [-o OUT.pnplttr] [options]
 | `--page-index` | `0` | Which PDF page to convert |
 | `--rotate` | `90` | Rotate artwork clockwise: `0`, `90`, `180`, `270` |
 | `--outline` / `--no-outline` | `--outline` | Draw a rectangular outline around the artwork |
+| `--merge` / `--no-merge` | `--merge` | Join polylines whose endpoints touch, so the pen stays down |
+| `--merge-tolerance` | `0.01` | Endpoint gap (mm) still counted as the same point |
 | `--list-layers` | – | List detected layers and exit |
 | `--compact` | – | Write minified JSON |
 | `-q, --quiet` | – | Suppress the summary |
@@ -104,6 +106,7 @@ print(result.stats.elements, result.stats.page_mm, result.stats.used_layers)
 | `geometry.py` | Affine matrices, Bézier flattening, bounding boxes |
 | `model.py` | `Subpath` / `Move` / `Path` — mirrors the app's `PlotterStroke` |
 | `interpreter.py` | Executes graphics operators into painted `Path`s |
+| `merge.py` | Joins touching polylines so the pen stays down |
 | `pnplttr.py` | Builds and writes the `.pnplttr` document (schema v2) |
 | `config.py` | `ConvertOptions`, workspace/page presets |
 | `convert.py` | The pipeline: PDF -> filtered paths -> fitted document (+ stats) |
@@ -120,9 +123,30 @@ Conversion steps:
    scale and page size, then map points from PDF device space
    (points, y-up) to document space (mm, y-down): `y_doc = (max_y - y) * mm`
    composed with the rotation.
-6. Emit one element per subpath, with pens in first-seen layer order.
+6. Emit one element per stroke, with pens in first-seen layer order. In
+   `drawing` mode, polylines whose endpoints touch are joined first so the
+   plotter does not lift the pen at a line break (see *Continuous lines*).
 7. Append a rectangular `outline` element around the fitted artwork bounds
    (last element, first pen) unless `--no-outline` is given.
+
+### Continuous lines
+
+A PDF moveto starts a new subpath, and CAD exporters use one even where a
+single visible line continues, so a naive conversion splits that line into
+several elements — and the plotter lifts the pen at every break. On the sample
+drawing 3771 elements contain 335 such splits.
+
+`--merge` (default) joins them: polylines whose endpoints coincide within
+`--merge-tolerance` are chained into one stroke, reversing a piece when
+needed. Only the pen lifts change — every segment is still drawn exactly once,
+in the same direction of travel along the line, so the plotted result is
+identical (at `--merge-tolerance 0` the segment multiset is bit-for-bit
+unchanged). Merging never joins across layers, and it never re-draws a segment
+to force continuity, which would ink it twice. Where three or more polylines
+meet at a junction the stroke stops there and a new one begins.
+
+In `--mode path` the merging is skipped: each element keeps one subpath's
+Bézier strokes.
 
 ### Output modes
 

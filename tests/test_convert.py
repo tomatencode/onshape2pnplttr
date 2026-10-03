@@ -277,6 +277,90 @@ class OutlineTests(unittest.TestCase):
         self.assertAlmostEqual(min(xs), (300.0 - 100 * PT_TO_MM) / 2, places=2)
 
 
+class MergeTests(unittest.TestCase):
+    """Continuous lines must not be split across several elements."""
+
+    #: One straight line broken in two by a moveto onto its own endpoint.
+    SPLIT = b"0 0 m 10 0 l 10 0 m 20 0 l S"
+    NO_JOIN = b"0 0 m 10 0 l 40 0 m 50 0 l S"
+
+    def _doc(self, options=None):
+        opts = options or ConvertOptions(outline=False)
+        return convert_bytes(make_pdf(self.SPLIT), opts)
+
+    def test_split_line_becomes_one_element(self):
+        document = self._doc().document
+        self.assertEqual(len(document["elements"]), 1)
+        self.assertEqual(len(document["elements"][0]["points"]), 3)
+
+    def test_merging_is_on_by_default(self):
+        self.assertTrue(ConvertOptions().merge_continuations)
+        self.assertEqual(ConvertOptions().merge_tolerance_mm, 0.01)
+
+    def test_merge_can_be_disabled(self):
+        result = self._doc(ConvertOptions(outline=False, merge_continuations=False))
+        self.assertEqual(len(result.document["elements"]), 2)
+        self.assertEqual(result.stats.merged, 0)
+
+    def test_unrelated_lines_are_not_merged(self):
+        document = convert_bytes(
+            make_pdf(self.NO_JOIN), ConvertOptions(outline=False)
+        ).document
+        self.assertEqual(len(document["elements"]), 2)
+
+    def test_stats_report_removed_pen_lifts(self):
+        result = self._doc()
+        self.assertEqual(result.stats.subpaths, 2)
+        self.assertEqual(result.stats.merged, 1)
+        self.assertEqual(result.stats.elements, 1)
+
+    def test_merge_preserves_every_point(self):
+        """Merging only removes pen lifts: the drawn geometry is identical."""
+        merged = self._doc().document["elements"][0]["points"]
+        split = self._doc(
+            ConvertOptions(outline=False, merge_continuations=False)
+        ).document["elements"]
+        before = [point for element in split for point in element["points"]]
+        self.assertEqual(len(before) - len(merged), 1)  # the shared join point
+
+    def test_merge_does_not_join_across_pens(self):
+        pdf = make_pdf(LAYER_CONTENT, resources=LAYER_RESOURCES, extra_objects=LAYER_OCGS)
+        elements = convert_bytes(
+            pdf, ConvertOptions(outline=False)
+        ).document["elements"]
+        self.assertEqual(len(elements), 2)
+        self.assertEqual([e["pen"] for e in elements], [0, 1])
+
+    def test_zero_tolerance_still_joins_an_exact_touch(self):
+        # The split above is exactly coincident, so even exact matching merges it.
+        document = self._doc(ConvertOptions(outline=False, merge_tolerance_mm=0.0)).document
+        self.assertEqual(len(document["elements"]), 1)
+
+    def test_path_mode_keeps_one_element_per_subpath(self):
+        result = self._doc(ConvertOptions(outline=False, element_mode="path"))
+        self.assertEqual(len(result.document["elements"]), 2)
+        self.assertEqual(result.stats.merged, 0)
+
+    def test_merge_respects_negative_tolerance_validation(self):
+        with self.assertRaises(ValueError):
+            ConvertOptions(merge_tolerance_mm=-1.0)
+
+    def test_merged_stroke_stays_within_page(self):
+        result = convert_bytes(make_pdf(b"0 0 m 10 0 l 10 0 m 20 5 l 20 5 m 20 10 l S"))
+        page = result.document["page"]
+        for x, y in all_points(result.document):
+            self.assertGreaterEqual(x, -1e-6)
+            self.assertLessEqual(x, page["page_width"] + 1e-6)
+            self.assertGreaterEqual(y, -1e-6)
+            self.assertLessEqual(y, page["page_height"] + 1e-6)
+
+    def test_rectangle_pieces_merge_into_single_stroke(self):
+        content = b"0 0 m 100 0 l 100 0 m 100 50 l 100 50 m 0 50 l 0 50 m 0 0 l S"
+        result = convert_bytes(make_pdf(content), ConvertOptions(outline=False))
+        self.assertEqual(len(result.document["elements"]), 1)
+        self.assertEqual(len(result.document["elements"][0]["points"]), 5)
+
+
 class EmptyTests(unittest.TestCase):
     def test_empty_document_still_has_a_pen(self):
         result = convert_bytes(make_pdf(b"n"))

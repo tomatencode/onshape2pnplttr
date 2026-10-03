@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .config import DEFAULT_WORKSPACE, PAGE_PRESETS, ROTATE_CHOICES, WORKSPACE_PRESETS, ConvertOptions
 from .convert import ConversionResult, convert_pdf
+from .merge import DEFAULT_TOLERANCE_MM
 from .pnplttr import write_document
 
 
@@ -63,6 +64,12 @@ def build_parser() -> argparse.ArgumentParser:
                         help="rotate artwork clockwise in degrees (default: %(default)s)")
     parser.add_argument("--outline", action=argparse.BooleanOptionalAction, default=True,
                         help="draw a rectangular outline around the artwork (default: %(default)s)")
+    parser.add_argument("--merge", action=argparse.BooleanOptionalAction, default=True,
+                        help="join polylines whose endpoints touch, so the pen stays down "
+                             "(default: %(default)s)")
+    parser.add_argument("--merge-tolerance", type=float, default=DEFAULT_TOLERANCE_MM, metavar="MM",
+                        help="endpoint gap in mm still counted as continuous "
+                             "(default: %(default)s)")
     parser.add_argument("--list-layers", action="store_true", help="list detected layers and exit")
     parser.add_argument("--compact", action="store_true", help="write minified JSON")
     parser.add_argument("-q", "--quiet", action="store_true", help="suppress the summary")
@@ -88,6 +95,8 @@ def _options_from_args(args: argparse.Namespace) -> ConvertOptions:
         page_index=args.page_index,
         rotate=args.rotate,
         outline=args.outline,
+        merge_continuations=args.merge,
+        merge_tolerance_mm=args.merge_tolerance,
     )
 
 
@@ -95,6 +104,9 @@ def _print_summary(result: ConversionResult, output: Path, source: Path) -> None
     stats = result.stats
     print(f"{source} -> {output}")
     print(f"  elements : {stats.elements}   subpaths: {stats.subpaths}   points: {stats.points}")
+    if stats.merged:
+        print(f"  merged   : {stats.merged} pen lift(s) removed "
+              f"({stats.elements} strokes instead of {stats.elements + stats.merged})")
     print(f"  artwork  : {stats.natural_mm[0]:.2f} x {stats.natural_mm[1]:.2f} mm "
           f"(scale {stats.scale:.4f})")
     print(f"  page     : {stats.page_mm[0]:.2f} x {stats.page_mm[1]:.2f} mm")
