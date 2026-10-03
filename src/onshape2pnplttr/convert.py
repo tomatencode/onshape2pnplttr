@@ -171,6 +171,29 @@ def _build_document(paths: list[Path], options: ConvertOptions) -> ConversionRes
             elements.append(pnplttr.drawing_element(element_id, pen, index, points))
             stats.points += len(points)
 
+    if options.outline and entries:
+        # Rectangular outline around the fitted artwork bounds (document space
+        # rectangle at the drawn offset), emitted last on the first pen.
+        x0 = round(offset_x, options.round_mm)
+        y0 = round(offset_y, options.round_mm)
+        x1 = round(offset_x + draw_w, options.round_mm)
+        y1 = round(offset_y + draw_h, options.round_mm)
+        outline_id = f"e{len(elements) + 1}"
+        outline_z = len(elements)
+        if options.element_mode == "path":
+            corner = [(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)]
+            moves = [
+                {"type": "Line", "x1": ax, "y1": ay, "x2": bx, "y2": by}
+                for (ax, ay), (bx, by) in zip(corner, corner[1:])
+            ]
+            elements.append(
+                pnplttr.path_element(outline_id, 0, outline_z, [{"start": [x0, y0], "moves": moves}])
+            )
+        else:
+            outline_points = [(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)]
+            elements.append(pnplttr.drawing_element(outline_id, 0, outline_z, outline_points))
+            stats.points += len(outline_points)
+
     ws_w, ws_h = options.workspace
     if draw_w > ws_w + 1e-6 or draw_h > ws_h + 1e-6:
         stats.warnings.append(

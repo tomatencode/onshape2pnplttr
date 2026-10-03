@@ -41,7 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
                         help="plotter workspace preset (default: %(default)s)")
     parser.add_argument("--workspace-size", type=_parse_size, metavar="WxH",
                         help="explicit workspace in mm, overrides --workspace")
-    parser.add_argument("--page", choices=sorted(PAGE_PRESETS),
+    parser.add_argument("--page", choices=sorted(PAGE_PRESETS), default="A4",
                         help="fix the output page size to a preset (artwork is centred)")
     parser.add_argument("--fit", choices=["fit", "actual", "scale"], default="fit",
                         help="fit to workspace, 1:1 mm, or use --scale (default: %(default)s)")
@@ -61,6 +61,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--page-index", type=int, default=0, help="PDF page to convert (default: 0)")
     parser.add_argument("--rotate", type=int, choices=list(ROTATE_CHOICES), default=90,
                         help="rotate artwork clockwise in degrees (default: %(default)s)")
+    parser.add_argument("--outline", action=argparse.BooleanOptionalAction, default=True,
+                        help="draw a rectangular outline around the artwork (default: %(default)s)")
     parser.add_argument("--list-layers", action="store_true", help="list detected layers and exit")
     parser.add_argument("--compact", action="store_true", help="write minified JSON")
     parser.add_argument("-q", "--quiet", action="store_true", help="suppress the summary")
@@ -85,6 +87,7 @@ def _options_from_args(args: argparse.Namespace) -> ConvertOptions:
         drop_layers=tuple(args.drop_layer),
         page_index=args.page_index,
         rotate=args.rotate,
+        outline=args.outline,
     )
 
 

@@ -41,6 +41,9 @@ class ConvertOptions:
     ``rotate`` turns the artwork clockwise by 0/90/180/270 degrees *before*
     fitting. ``rotate=90`` is the default because portrait CAD title blocks
     plot best on landscape plotter workspaces.
+
+    ``outline`` (default ``True``) appends a rectangular outline around the
+    fitted artwork bounds as the last element, using the first pen.
     """
 
     workspace: tuple[float, float] = WORKSPACE_PRESETS[DEFAULT_WORKSPACE]
@@ -61,6 +64,7 @@ class ConvertOptions:
     drop_layers: tuple[str, ...] = ()
     page_index: int = 0
     rotate: int = 90  # clockwise degrees; one of ROTATE_CHOICES
+    outline: bool = True  # append a rectangular outline around the artwork
 
     def __post_init__(self) -> None:
         if self.fit not in FIT_MODES:

@@ -185,7 +185,8 @@ class ModeTests(unittest.TestCase):
 
     def test_includes_fills_by_default(self):
         content = b"0 0 m 10 0 l 10 10 l f 50 0 m 60 0 l S"
-        self.assertEqual(len(convert_bytes(make_pdf(content)).document["elements"]), 2)
+        opts = ConvertOptions(outline=False)
+        self.assertEqual(len(convert_bytes(make_pdf(content), opts).document["elements"]), 2)
 
     def test_no_fills_drops_filled_regions(self):
         content = b"0 0 m 10 0 l 10 10 l f 50 0 m 60 0 l S"
@@ -210,10 +211,11 @@ class LayerTests(unittest.TestCase):
         self.assertEqual([p["name"] for p in result.document["pens"]], ["LayerA", "LayerB"])
 
     def test_elements_reference_the_right_pen(self):
-        self.assertEqual([e["pen"] for e in self._doc().document["elements"]], [0, 1])
+        elements = self._doc(ConvertOptions(outline=False)).document["elements"]
+        self.assertEqual([e["pen"] for e in elements], [0, 1])
 
     def test_drop_layer(self):
-        result = self._doc(ConvertOptions(drop_layers=("LayerB",)))
+        result = self._doc(ConvertOptions(drop_layers=("LayerB",), outline=False))
         self.assertEqual(result.stats.used_layers, ["LayerA"])
         self.assertEqual(len(result.document["elements"]), 1)
 
@@ -221,6 +223,58 @@ class LayerTests(unittest.TestCase):
         result = self._doc(ConvertOptions(layer_colors={"LayerB": "#ff0000"}))
         pens = {p["name"]: p["color"] for p in result.document["pens"]}
         self.assertEqual(pens["LayerB"], "#ff0000")
+
+
+class OutlineTests(unittest.TestCase):
+    RECT = b"0 0 m 100 0 l 100 50 l 0 50 l h S"  # 100 x 50 pt rectangle
+
+    def test_outline_on_by_default(self):
+        self.assertTrue(ConvertOptions().outline)
+
+    def test_outline_appends_closed_rectangle(self):
+        opts = ConvertOptions(fit="actual", rotate=0)
+        document = convert_bytes(make_pdf(self.RECT), opts).document
+        outline = document["elements"][-1]
+        self.assertEqual(outline["type"], "Drawing")
+        self.assertEqual(outline["pen"], 0)
+        self.assertEqual(len(document["elements"]), 2)
+        w, h = 100 * PT_TO_MM, 50 * PT_TO_MM
+        self.assertEqual(outline["points"],
+                         [[0.0, 0.0], [round(w, 3), 0.0], [round(w, 3), round(h, 3)],
+                          [0.0, round(h, 3)], [0.0, 0.0]])
+
+    def test_outline_can_be_disabled(self):
+        opts = ConvertOptions(fit="actual", rotate=0, outline=False)
+        document = convert_bytes(make_pdf(self.RECT), opts).document
+        self.assertEqual(len(document["elements"]), 1)
+
+    def test_no_outline_when_empty(self):
+        result = convert_bytes(make_pdf(b"n"))
+        self.assertEqual(result.document["elements"], [])
+
+    def test_outline_uses_rotated_bounds(self):
+        opts = ConvertOptions(fit="actual", rotate=90)
+        document = convert_bytes(make_pdf(self.RECT), opts).document
+        outline = document["elements"][-1]
+        w, h = 50 * PT_TO_MM, 100 * PT_TO_MM
+        self.assertEqual(
+            outline["points"],
+            [[0.0, 0.0], [round(w, 3), 0.0], [round(w, 3), round(h, 3)],
+             [0.0, round(h, 3)], [0.0, 0.0]],
+        )
+
+    def test_outline_path_mode(self):
+        opts = ConvertOptions(element_mode="path", fit="actual", rotate=0)
+        outline = convert_bytes(make_pdf(self.RECT), opts).document["elements"][-1]
+        self.assertEqual(outline["type"], "Path")
+        self.assertEqual(len(outline["strokes"][0]["moves"]), 4)
+        self.assertTrue(all(m["type"] == "Line" for m in outline["strokes"][0]["moves"]))
+
+    def test_outline_centred_on_fixed_page(self):
+        opts = ConvertOptions(fit="actual", page=(300.0, 400.0), rotate=0)
+        document = convert_bytes(make_pdf(self.RECT), opts).document
+        xs = [p[0] for p in document["elements"][-1]["points"]]
+        self.assertAlmostEqual(min(xs), (300.0 - 100 * PT_TO_MM) / 2, places=2)
 
 
 class EmptyTests(unittest.TestCase):

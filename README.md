@@ -65,6 +65,7 @@ onshape2pnplttr INPUT.pdf [-o OUT.pnplttr] [options]
 | `--drop-layer NAME` | – | Exclude a layer (repeatable) |
 | `--page-index` | `0` | Which PDF page to convert |
 | `--rotate` | `90` | Rotate artwork clockwise: `0`, `90`, `180`, `270` |
+| `--outline` / `--no-outline` | `--outline` | Draw a rectangular outline around the artwork |
 | `--list-layers` | – | List detected layers and exit |
 | `--compact` | – | Write minified JSON |
 | `-q, --quiet` | – | Suppress the summary |
@@ -120,6 +121,8 @@ Conversion steps:
    (points, y-up) to document space (mm, y-down): `y_doc = (max_y - y) * mm`
    composed with the rotation.
 6. Emit one element per subpath, with pens in first-seen layer order.
+7. Append a rectangular `outline` element around the fitted artwork bounds
+   (last element, first pen) unless `--no-outline` is given.
 
 ### Output modes
 
